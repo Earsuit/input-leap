@@ -261,7 +261,13 @@ void MainWindow::createTrayIcon()
     m_pTrayIconMenu->addAction(ui_->m_pActionMinimize);
     m_pTrayIconMenu->addAction(ui_->m_pActionRestore);
     m_pTrayIconMenu->addSeparator();
+#ifdef Q_OS_MAC
+    auto* tray_quit_action = m_pTrayIconMenu->addAction(tr("&Quit"));
+    tray_quit_action->setMenuRole(QAction::NoRole);
+    connect(tray_quit_action, &QAction::triggered, this, &MainWindow::quit);
+#else
     m_pTrayIconMenu->addAction(ui_->m_pActionQuit);
+#endif
 
     m_pTrayIcon = new QSystemTrayIcon(this);
     m_pTrayIcon->setContextMenu(m_pTrayIconMenu);
@@ -343,7 +349,8 @@ void MainWindow::initConnections()
     connect(ui_->m_pActionStopCmdApp, &QAction::triggered, this, &MainWindow::stop_cmd_app);
     connect(ui_->m_pActionShowLog, &QAction::triggered, this, &MainWindow::showLogWindow);
     connect(ui_->m_pActionReload, &QAction::triggered, this, &MainWindow::restart_cmd_app);
-    connect(ui_->m_pActionQuit, &QAction::triggered, qApp, &QCoreApplication::quit);
+    connect(ui_->m_pActionQuit, &QAction::triggered, this, &MainWindow::quit);
+    connect(qApp, &QCoreApplication::aboutToQuit, this, &MainWindow::stop_cmd_app);
 }
 
 void MainWindow::saveSettings()
@@ -641,6 +648,7 @@ void MainWindow::start_cmd_app()
     m_pLogWindow->startNewInstance();
 
     appendLogInfo("starting " + QString(app_role() == AppRole::Server ? "server" : "client"));
+    m_ProcessRunTimer.start();
 
     qDebug() << args;
 
@@ -823,6 +831,13 @@ void MainWindow::stop_cmd_app()
 
     m_ExpectedRunningState = kStopped;
 
+    if (m_pRestartTimer) {
+        m_pRestartTimer->stop();
+        delete m_pRestartTimer;
+        m_pRestartTimer = nullptr;
+    }
+    m_RapidCrashCount = 0;
+
     if (appConfig().processMode() == Service)
     {
         stopService();
@@ -843,6 +858,13 @@ void MainWindow::stop_cmd_app()
 
     // reset so that new connects cause auto-hide.
     m_AlreadyHidden = false;
+}
+
+void MainWindow::quit()
+{
+    m_ExpectedRunningState = kStopped;
+    stop_cmd_app();
+    qApp->quit();
 }
 
 void MainWindow::stopService()
@@ -882,8 +904,27 @@ void MainWindow::cmd_app_finished(int exitCode, QProcess::ExitStatus)
     }
 
     if (m_ExpectedRunningState == kStarted) {
-        QTimer::singleShot(1000, this, &MainWindow::start_cmd_app);
-        appendLogInfo(QString("detected process not running, auto restarting"));
+        if (m_ProcessRunTimer.isValid() && m_ProcessRunTimer.elapsed() < 5000) {
+            ++m_RapidCrashCount;
+        } else {
+            m_RapidCrashCount = 0;
+        }
+
+        if (m_RapidCrashCount > 3) {
+            appendLogError("process keeps crashing, giving up auto restart");
+            stop_cmd_app();
+            QMessageBox::critical(this, tr("InputLeap Error"),
+                tr("The InputLeap process exited unexpectedly multiple times.\n"
+                   "Please check that InputLeap has Accessibility permissions in "
+                   "System Settings -> Privacy & Security -> Accessibility."));
+        } else {
+            delete m_pRestartTimer;
+            m_pRestartTimer = new QTimer(this);
+            m_pRestartTimer->setSingleShot(true);
+            connect(m_pRestartTimer, &QTimer::timeout, this, &MainWindow::start_cmd_app);
+            m_pRestartTimer->start(1000);
+            appendLogInfo(QString("detected process not running, auto restarting"));
+        }
     }
     else {
         set_connection_state(AppConnectionState::DISCONNECTED);

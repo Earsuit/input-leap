@@ -26,8 +26,8 @@
 #include <QSettings>
 #include <QProcess>
 #include <QThread>
-
-
+#include <QTimer>
+#include <QElapsedTimer>
 
 #include "ServerConfig.h"
 #include "AppConfig.h"
@@ -125,6 +125,7 @@ public slots:
         void cmd_app_finished(int exitCode, QProcess::ExitStatus);
         void trayActivated(QSystemTrayIcon::ActivationReason reason);
         void stop_cmd_app();
+        void quit();
         void logOutput();
         void logError();
         void bonjourInstallFinished();
@@ -193,6 +194,9 @@ public slots:
         SslCertificate* m_pSslCertificate;
         QStringList m_PendingClientNames;
         LogWindow *m_pLogWindow;
+        QTimer* m_pRestartTimer = nullptr;
+        QElapsedTimer m_ProcessRunTimer;
+        int m_RapidCrashCount = 0;
 
         bool m_fingerprint_expanded = false;
 
