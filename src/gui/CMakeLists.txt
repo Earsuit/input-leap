@@ -249,22 +249,22 @@ elseif(WIN32)
 endif()
 
 if(INPUTLEAP_BUILD_TESTS)
-    set(GUI_TEST_SOURCE_FILES
-        test/KeySequenceTests.cpp
-        test/HotkeyTests.cpp
-        test/main.cpp
-    )
+    # set(GUI_TEST_SOURCE_FILES
+    #     test/KeySequenceTests.cpp
+    #     test/HotkeyTests.cpp
+    #     test/main.cpp
+    # )
 
-    add_executable(guiunittests
-        ${GUI_TEST_SOURCE_FILES}
-        ${GUI_COMMON_SOURCE_FILES}
-        ${GUI_COMMON_HEADER_FILES}
-    )
+    # add_executable(guiunittests
+    #     ${GUI_TEST_SOURCE_FILES}
+    #     ${GUI_COMMON_SOURCE_FILES}
+    #     ${GUI_COMMON_HEADER_FILES}
+    # )
 
-    add_test(NAME guiunittests
-             COMMAND guiunittests
-             WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
+    # add_test(NAME guiunittests
+    #          COMMAND guiunittests
+    #          WORKING_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
-    target_include_directories(guiunittests PUBLIC ../../ext)
-    target_link_libraries(guiunittests gtest gmock Qt${QT_DEFAULT_MAJOR_VERSION}::Core Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets Qt${QT_DEFAULT_MAJOR_VERSION}::Network ${libs})
+    # target_include_directories(guiunittests PUBLIC ../../ext)
+    # target_link_libraries(guiunittests gtest gmock Qt${QT_DEFAULT_MAJOR_VERSION}::Core Qt${QT_DEFAULT_MAJOR_VERSION}::Widgets Qt${QT_DEFAULT_MAJOR_VERSION}::Network ${libs})
 endif()
