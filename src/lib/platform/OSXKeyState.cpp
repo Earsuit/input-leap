@@ -515,7 +515,6 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
     case kVK_RightOption:
     case kVK_Control:
     case kVK_RightControl:
-    case kVK_CapsLock:
         switch (virtualKeyCode)
         {
         case kVK_Shift:
@@ -550,10 +549,6 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
                 modifiersDelta = NX_CONTROLMASK | NX_DEVICERCTLKEYMASK;
                 m_controlPressed = postDown;
                 break;
-        case kVK_CapsLock:
-                modifiersDelta = NX_ALPHASHIFTMASK;
-                m_capsPressed = postDown;
-                break;
         }
 
         // update the modifier bit
@@ -571,7 +566,73 @@ void OSXKeyState::postHIDVirtualKey(const std::uint8_t virtualKeyCode, const boo
         assert(KERN_SUCCESS == kr);
         break;
 
+    case kVK_CapsLock:
+        // Plan H: Only toggle input source, do NOT modify system state.
+        // We must NOT touch the 'modifiers' variable (it's static and shared
+        // with other keys). Modifying it would cause CapsLock to stay on
+        // for subsequent key events.
+        {
+            // Safety check - only proceed if this is actually CapsLock
+            if (virtualKeyCode != kVK_CapsLock) {
+                goto handle_default_key;
+            }
+            
+            // Only toggle on key down (not key up)
+            if (postDown) {
+                // Get current input source
+                TISInputSourceRef currentSource = TISCopyCurrentKeyboardInputSource();
+                if (currentSource != nullptr) {
+                    // Check if current source is ASCII-capable (English)
+                    CFBooleanRef isAscii = (CFBooleanRef)TISGetInputSourceProperty(
+                        currentSource, kTISPropertyInputSourceIsASCIICapable);
+                    
+                    if (isAscii == kCFBooleanTrue) {
+                        // Currently in English, switch to non-ASCII (e.g., Chinese)
+                        CFArrayRef sources = TISCreateInputSourceList(nullptr, false);
+                        if (sources != nullptr) {
+                            CFIndex count = CFArrayGetCount(sources);
+                            for (CFIndex i = 0; i < count; i++) {
+                                TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(sources, i);
+                                CFBooleanRef sourceIsAscii = (CFBooleanRef)TISGetInputSourceProperty(
+                                    source, kTISPropertyInputSourceIsASCIICapable);
+                                if (sourceIsAscii == kCFBooleanFalse) {
+                                    TISSelectInputSource(source);
+                                    break;
+                                }
+                            }
+                            CFRelease(sources);
+                        }
+                    } else {
+                        // Currently in non-ASCII, switch to ASCII (English)
+                        CFArrayRef sources = TISCreateInputSourceList(nullptr, false);
+                        if (sources != nullptr) {
+                            CFIndex count = CFArrayGetCount(sources);
+                            for (CFIndex i = 0; i < count; i++) {
+                                TISInputSourceRef source = (TISInputSourceRef)CFArrayGetValueAtIndex(sources, i);
+                                CFBooleanRef sourceIsAscii = (CFBooleanRef)TISGetInputSourceProperty(
+                                    source, kTISPropertyInputSourceIsASCIICapable);
+                                if (sourceIsAscii == kCFBooleanTrue) {
+                                    TISSelectInputSource(source);
+                                    break;
+                                }
+                            }
+                            CFRelease(sources);
+                        }
+                    }
+                    CFRelease(currentSource);
+                }
+            }
+            
+            // NOTE: We do NOT:
+            // 1. Set m_capsPressed (prevents LED tracking)
+            // 2. Modify 'modifiers' variable (prevents affecting other keys)
+            // 3. Send key event to system (prevents LED from turning on)
+        }
+        break;
+
+handle_default_key:
     default:
+        // Handle all non-modifier keys normally
         event.key.repeat = false;
         event.key.keyCode = virtualKeyCode;
         event.key.origCharSet = event.key.charSet = NX_ASCIISET;
@@ -903,6 +964,21 @@ OSXKeyState::adjustAltGrModifier(const KeyIDs& ids,
                 return;
             }
         }
+    }
+}
+
+bool
+OSXKeyState::isIgnoredKey(KeyID key, KeyModifierMask mask) const
+{
+    // Don't ignore CapsLock - we need to handle it in postHIDVirtualKey
+    // for input method switching. NumLock and ScrollLock are ignored.
+    switch (key) {
+    case kKeyNumLock:
+    case kKeyScrollLock:
+        return true;
+
+    default:
+        return false;
     }
 }
 

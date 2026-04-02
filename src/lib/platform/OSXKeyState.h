@@ -104,6 +104,7 @@ protected:
     // KeyState overrides
     virtual void getKeyMap(inputleap::KeyMap& keyMap);
     virtual void fakeKey(const Keystroke& keystroke);
+    virtual bool isIgnoredKey(KeyID key, KeyModifierMask mask) const;
 
 private:
     class KeyResource;
