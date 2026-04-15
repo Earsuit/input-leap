@@ -453,6 +453,7 @@ SecureSocket::secureAccept(int socket)
             else {
                 LOG_ERR("failed to verify client certificate fingerprint");
                 secure_accept_retry_ = 0;
+                sendEvent(EventType::SOCKET_STOP_RETRY);
                 disconnect();
                 return -1; // Fingerprint failed, error
             }
@@ -524,6 +525,7 @@ SecureSocket::secureConnect(int socket)
     }
     else {
         LOG_ERR("failed to verify server certificate fingerprint");
+        sendEvent(EventType::SOCKET_STOP_RETRY);
         disconnect();
         return -1; // Fingerprint failed, error
     }
@@ -648,7 +650,7 @@ std::string SecureSocket::getError()
 void
 SecureSocket::disconnect()
 {
-    sendEvent(EventType::SOCKET_STOP_RETRY);
+    LOG_DEBUG("SecureSocket::disconnect() called");
     sendEvent(EventType::SOCKET_DISCONNECTED);
     sendEvent(EventType::STREAM_INPUT_SHUTDOWN);
 }

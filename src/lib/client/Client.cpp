@@ -711,6 +711,7 @@ Client::onFileReceiveCompleted()
 
 void Client::handle_stop_retry()
 {
+    LOG_DEBUG("Client::handle_stop_retry: disabling restartable");
     m_args.m_restartable = false;
 }
 

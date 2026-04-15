@@ -284,6 +284,7 @@ void ClientApp::handle_client_failed(const Event& e)
     const auto& info = e.get_data_as<Client::FailInfo>();
 
     updateStatus(std::string("Failed to connect to server: ") + info.m_what);
+    LOG_DEBUG("handle_client_failed: restartable=%d retry=%d", args().m_restartable, info.m_retry);
     if (!args().m_restartable || !info.m_retry) {
         LOG_ERR("failed to connect to server: %s", info.m_what.c_str());
         m_events->add_event(EventType::QUIT);
@@ -300,6 +301,7 @@ void ClientApp::handle_client_failed(const Event& e)
 void ClientApp::handle_client_disconnected()
 {
     LOG_NOTE("disconnected from server");
+    LOG_DEBUG("handle_client_disconnected: restartable=%d", args().m_restartable);
     if (!args().m_restartable) {
         m_events->add_event(EventType::QUIT);
     }
@@ -452,6 +454,7 @@ ClientApp::mainLoop()
     DAEMON_RUNNING(false);
 
     // close down
+    LOG_NOTE("client main loop is exiting");
     LOG_DEBUG1("stopping client");
     stopClient();
     updateStatus();

@@ -228,6 +228,7 @@ void App::handle_ipc_message(const Event& e)
 void App::run_events_loop()
 {
     m_events->loop();
+    LOG_DEBUG("event loop has exited");
 
 #if defined(MAC_OS_X_VERSION_10_7)
 

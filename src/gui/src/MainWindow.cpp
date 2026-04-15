@@ -885,7 +885,11 @@ void MainWindow::stopDesktop()
     if (cmd_app_process_->isOpen()) {
 #if SYSAPI_UNIX
         kill(cmd_app_process_->processId(), SIGTERM);
-        cmd_app_process_->waitForFinished(5000);
+        if (!cmd_app_process_->waitForFinished(5000)) {
+            appendLogError("desktop process did not exit after SIGTERM, sending SIGKILL");
+            kill(cmd_app_process_->processId(), SIGKILL);
+            cmd_app_process_->waitForFinished(2000);
+        }
 #endif
         cmd_app_process_->close();
     }
@@ -904,27 +908,33 @@ void MainWindow::cmd_app_finished(int exitCode, QProcess::ExitStatus)
     }
 
     if (m_ExpectedRunningState == kStarted) {
-        if (m_ProcessRunTimer.isValid() && m_ProcessRunTimer.elapsed() < 5000) {
+        if (m_ProcessRunTimer.isValid() && m_ProcessRunTimer.elapsed() < 60000) {
             ++m_RapidCrashCount;
         } else {
             m_RapidCrashCount = 0;
         }
 
-        if (m_RapidCrashCount > 3) {
-            appendLogError("process keeps crashing, giving up auto restart");
-            stop_cmd_app();
-            QMessageBox::critical(this, tr("InputLeap Error"),
-                tr("The InputLeap process exited unexpectedly multiple times.\n"
-                   "Please check that InputLeap has Accessibility permissions in "
-                   "System Settings -> Privacy & Security -> Accessibility."));
-        } else {
-            delete m_pRestartTimer;
-            m_pRestartTimer = new QTimer(this);
-            m_pRestartTimer->setSingleShot(true);
-            connect(m_pRestartTimer, &QTimer::timeout, this, &MainWindow::start_cmd_app);
-            m_pRestartTimer->start(1000);
-            appendLogInfo(QString("detected process not running, auto restarting"));
+        appendLogInfo(QString("cmd_app_finished: exitCode=%1 rapidCrashCount=%2").arg(exitCode).arg(m_RapidCrashCount));
+
+        int restartDelayMs = 1000;
+        if (m_RapidCrashCount > 10) {
+            restartDelayMs = 30000;
+        } else if (m_RapidCrashCount > 5) {
+            restartDelayMs = 10000;
+        } else if (m_RapidCrashCount > 3) {
+            restartDelayMs = 5000;
         }
+
+        if (m_RapidCrashCount > 10) {
+            appendLogError("process is restarting rapidly; slowing down auto restart");
+        }
+
+        delete m_pRestartTimer;
+        m_pRestartTimer = new QTimer(this);
+        m_pRestartTimer->setSingleShot(true);
+        connect(m_pRestartTimer, &QTimer::timeout, this, &MainWindow::start_cmd_app);
+        m_pRestartTimer->start(restartDelayMs);
+        appendLogInfo(QString("detected process not running, auto restarting in %1 seconds").arg(restartDelayMs / 1000));
     }
     else {
         set_connection_state(AppConnectionState::DISCONNECTED);
